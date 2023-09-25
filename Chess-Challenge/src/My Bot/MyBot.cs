@@ -363,7 +363,7 @@ namespace ChessChallenge.Example
             if (root != null)
                 try
                 {
-                    root = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory.Last()];
+                    root = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory[^1]];
                     var visits = root.Visits;
                     Console.WriteLine($"Reusing {root.Visits} visits");
                     root.Parent = new DummyNode();
