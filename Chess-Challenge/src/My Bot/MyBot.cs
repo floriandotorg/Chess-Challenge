@@ -148,7 +148,7 @@ namespace ChessChallenge.Example
         public static int Other(int side) => side ^ 1;
         public static int PColor(int p) => p & 1;
 
-        public static void InitTables()
+        static Node()
         {
             int pc, p, sq;
             for (p = PAWN, pc = WHITE_PAWN; p <= KING; pc += 2, p++)
@@ -407,11 +407,6 @@ namespace ChessChallenge.Example
     public class MyBot : IChessBot
     {
         Node? root;
-
-        public MyBot()
-        {
-            Node.InitTables();
-        }
 
         public Move Think(Board board, Timer timer)
         {
