@@ -203,9 +203,10 @@ namespace ChessChallenge.Example
         Node Parent;
         int N;
         bool IsExpanded = false;
-        protected float[] ChildValues;
-        protected int[] ChildVisits;
-        protected Move[] ChildMoves;
+        readonly bool IsDummy;
+        readonly float[] ChildValues;
+        readonly int[] ChildVisits;
+        readonly Move[] ChildMoves;
         public static Board RootBoard;
         Dictionary<Move, Node> Children = new();
         public static bool IsWhiteToMove;
@@ -229,8 +230,6 @@ namespace ChessChallenge.Example
             { PieceType.King, KING },
         };
 
-        virtual protected bool IsDummy => false;
-
         // static float EvalBoard(Board board)
         // {
         //     if (board.IsInCheckmate())
@@ -248,21 +247,29 @@ namespace ChessChallenge.Example
         //     return score / 39;
         // }
 
-        virtual protected Board BorrowBoard()
+        Board BorrowBoard()
         {
+            if (IsDummy) return Node.RootBoard;
+
             var board = Parent.BorrowBoard();
             board.MakeMove(Move);
             return board;
         }
 
-        virtual protected void ReturnBoard()
+        void ReturnBoard()
         {
+            if (IsDummy) return;
             Node.RootBoard.UndoMove(Move);
             Parent.ReturnBoard();
         }
 
-        protected Node()
-        { }
+        public Node()
+        {
+            IsDummy = true;
+            ChildValues = new float[1];
+            ChildVisits = new int[1];
+            ChildMoves = new Move[1];
+        }
 
         public Node(Node parent, int n)
         {
@@ -366,14 +373,14 @@ namespace ChessChallenge.Example
                     root = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory[^1]];
                     var visits = root.Visits;
                     Console.WriteLine($"Reusing {root.Visits} visits");
-                    root.Parent = new DummyNode();
+                    root.Parent = new Node();
                     root.N = 0;
                     root.Visits = visits;
                     return root;
                 }
                 catch (KeyNotFoundException) { }
 
-            return new Node(new DummyNode(), 0);
+            return new Node(new Node(), 0);
         }
 
         public void PrintTree(int depth = 1, int pad = 0)
@@ -385,23 +392,6 @@ namespace ChessChallenge.Example
             foreach (var child in Children.Values)
                 child.PrintTree(depth - 1, pad + 2);
         }
-    }
-
-    class DummyNode : Node
-    {
-        public DummyNode() : base()
-        {
-            ChildValues = new float[1];
-            ChildVisits = new int[1];
-            ChildMoves = new Move[1];
-        }
-
-        override protected Board BorrowBoard() => Node.RootBoard;
-
-        override protected void ReturnBoard()
-        { }
-
-        override protected bool IsDummy => true;
     }
 
     public class MyBot : IChessBot
