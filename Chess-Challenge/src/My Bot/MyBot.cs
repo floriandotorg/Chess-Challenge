@@ -194,15 +194,17 @@ namespace ChessChallenge.Example
             return (mgScore * gamePhase + egScore * egPhase) / (24 * 2000f) * (IsWhiteToMove == board.IsWhiteToMove ? 1 : -1);
         }
 
+        record struct Child(float Value, int Visits, Move move, Node? Node)
+        {
+            public Move Move { get; } = move;
+        }
+
         Node Parent;
         int N;
         bool IsExpanded = false;
         readonly bool IsDummy;
-        readonly float[] ChildValues;
-        readonly int[] ChildVisits;
-        readonly Move[] ChildMoves;
+        readonly Child[] Children;
         public static Board RootBoard;
-        Dictionary<Move, Node> Children = new();
         public static bool IsWhiteToMove;
         static Random Random = new Random();
         // static readonly Dictionary<PieceType, float> PieceValues = new()
@@ -251,43 +253,44 @@ namespace ChessChallenge.Example
         public Node()
         {
             IsDummy = true;
-            ChildValues = new float[1];
-            ChildVisits = new int[1];
-            ChildMoves = new Move[1];
+            Children = new Child[1];
         }
 
         public Node(Node parent, int n)
         {
             Parent = parent;
             N = n;
-            ChildMoves = BorrowBoard().GetLegalMoves();
-            ChildValues = new float[ChildMoves.Length];
-            ChildVisits = new int[ChildMoves.Length];
+            var legalMoves = BorrowBoard().GetLegalMoves();
+            Children = new Child[legalMoves.Length];
+            for (int i = 0; i < legalMoves.Length; i++)
+            {
+                Children[i] = new Child(0, 0, legalMoves[i], null);
+            }
             ReturnBoard();
         }
 
-        public Move Move => Parent.ChildMoves[N];
+        public Move Move => Parent.Children[N].Move;
 
         float Value
         {
-            get => Parent.ChildValues[N];
-            set => Parent.ChildValues[N] = value;
+            get => Parent.Children[N].Value;
+            set => Parent.Children[N].Value = value;
         }
 
         public int Visits
         {
-            get => Parent.ChildVisits[N];
-            set => Parent.ChildVisits[N] = value;
+            get => Parent.Children[N].Visits;
+            set => Parent.Children[N].Visits = value;
         }
 
         int BestChild()
         {
             int bestIndex = -1;
             float bestScore = float.MinValue;
-            for (var i = 0; i < ChildMoves.Length; ++i)
+            for (var i = 0; i < Children.Length; ++i)
             {
-                float score = ChildValues[i] / (ChildVisits[i] + 1e-10f)
-                    + 1f * MathF.Sqrt(MathF.Log(Visits) / (ChildVisits[i] + 1e-10f));
+                float score = Children[i].Value / (Children[i].Visits + 1e-10f)
+                    + 1f * MathF.Sqrt(MathF.Log(Visits) / (Children[i].Visits + 1e-10f));
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -300,28 +303,37 @@ namespace ChessChallenge.Example
         public Move BestMove()
         {
             int maxIndex = 0;
-            for (int index = 1; index < ChildVisits.Length; index++)
+            for (int index = 1; index < Children.Length; index++)
             {
-                if (ChildVisits[maxIndex] < ChildVisits[index])
+                if (Children[maxIndex].Visits < Children[index].Visits)
                 {
                     maxIndex = index;
                 }
             }
-            return ChildMoves[maxIndex];
+            return Children[maxIndex].Move;
+        }
+
+        ref Child GetChild(Move move)
+        {
+            for (int i = 0; i < Children.Length; i++)
+            {
+                if (Children[i].Move == move)
+                {
+                    return ref Children[i];
+                }
+            }
+            throw new KeyNotFoundException();
         }
 
         public Node Select()
         {
             Node current = this;
-            while (current.IsExpanded && current.ChildMoves.Length > 0)
+            while (current.IsExpanded && current.Children.Length > 0)
             {
                 var bestChildN = current.BestChild();
-                var bestChildMove = current.ChildMoves[bestChildN];
-                if (!current.Children.ContainsKey(bestChildMove))
-                {
-                    current.Children[bestChildMove] = new Node(current, bestChildN);
-                }
-                current = current.Children[bestChildMove];
+                ref Child c = ref current.Children[bestChildN];
+                c.Node ??= new Node(current, bestChildN);
+                current = c.Node;
             }
             return current;
         }
@@ -331,7 +343,7 @@ namespace ChessChallenge.Example
             IsExpanded = true;
             float result = 0;
 
-            if (ChildMoves.Length == 0)
+            if (Children.Length == 0)
             {
                 result = EvalBoard(BorrowBoard());
                 ReturnBoard();
@@ -339,10 +351,9 @@ namespace ChessChallenge.Example
             }
             else
             {
-                var n = Node.Random.Next(ChildMoves.Length);
-                var childMove = ChildMoves[n];
+                var n = Node.Random.Next(Children.Length);
                 var child = new Node(this, n);
-                Children[childMove] = child;
+                Children[n].Node = child;
                 result = EvalBoard(child.BorrowBoard());
                 child.ReturnBoard();
                 // Console.WriteLine($"Move: {childMove}, Result: {result}");
@@ -366,7 +377,8 @@ namespace ChessChallenge.Example
             if (root != null)
                 try
                 {
-                    root = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory[^1]];
+                    // Get the node which represented the last two moves
+                    root = root.GetChild(board.GameMoveHistory[^2]).Node.GetChild(board.GameMoveHistory[^1]).Node;
                     var visits = root.Visits;
                     Console.WriteLine($"Reusing {root.Visits} visits");
                     root.Parent = new Node();
@@ -385,8 +397,8 @@ namespace ChessChallenge.Example
                 return;
 
             Console.WriteLine($"{new String(' ', pad)}Move: {Move}, Value: {Value}, Visits: {Visits}, Avg: {Value / Visits}");
-            foreach (var child in Children.Values)
-                child.PrintTree(depth - 1, pad + 2);
+            foreach (var child in Children)
+                child.Node?.PrintTree(depth - 1, pad + 2);
         }
     }
 
