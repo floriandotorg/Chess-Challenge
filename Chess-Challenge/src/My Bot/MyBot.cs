@@ -7,17 +7,12 @@ namespace ChessChallenge.Example
 {
     class Node
     {
-        public static readonly int PAWN = 0;
-        public static readonly int KNIGHT = 1;
-        public static readonly int BISHOP = 2;
-        public static readonly int ROOK = 3;
-        public static readonly int QUEEN = 4;
-        public static readonly int KING = 5;
+        public static int PieceIndex(PieceType type) => ((int)type) - 1;
 
         public static readonly int WHITE = 0;
         public static readonly int BLACK = 1;
 
-        public static readonly int WHITE_PAWN = (2 * PAWN + WHITE);
+        public static readonly int WHITE_PAWN = (2 * PieceIndex(PieceType.Pawn) + WHITE);
         // public static readonly int BLACK_PAWN = (2 * PAWN + BLACK);
         // public static readonly int WHITE_KNIGHT = (2 * KNIGHT + WHITE);
         // public static readonly int BLACK_KNIGHT = (2 * KNIGHT + BLACK);
@@ -28,7 +23,7 @@ namespace ChessChallenge.Example
         // public static readonly int WHITE_QUEEN = (2 * QUEEN + WHITE);
         // public static readonly int BLACK_QUEEN = (2 * QUEEN + BLACK);
         // public static readonly int WHITE_KING = (2 * KING + WHITE);
-        public static readonly int BLACK_KING = (2 * KING + BLACK);
+        public static readonly int BLACK_KING = (2 * PieceIndex(PieceType.King) + BLACK);
         public static readonly int EMPTY = (BLACK_KING + 1);
 
         public static readonly int[] mg_value = { 82, 337, 365, 477, 1025, 0 };
@@ -151,7 +146,7 @@ namespace ChessChallenge.Example
         static Node()
         {
             int pc, p, sq;
-            for (p = PAWN, pc = WHITE_PAWN; p <= KING; pc += 2, p++)
+            for (p = PieceIndex(PieceType.Pawn), pc = WHITE_PAWN; p <= PieceIndex(PieceType.King); pc += 2, p++)
             {
                 for (sq = 0; sq < 64; sq++)
                 {
@@ -185,7 +180,7 @@ namespace ChessChallenge.Example
                 var piece = board.GetPiece(new Square(sq));
                 int pc = EMPTY;
                 if (!piece.IsNull)
-                    pc = PieceTypes[piece.PieceType] * 2 + (piece.IsWhite ? WHITE : BLACK);
+                    pc = PieceIndex(piece.PieceType) * 2 + (piece.IsWhite ? WHITE : BLACK);
                 if (pc != EMPTY)
                 {
                     mg[PColor(pc)] += mg_table[pc, sq];
@@ -219,15 +214,6 @@ namespace ChessChallenge.Example
         //     { PieceType.Queen, 9 },
         //     { PieceType.King, 0 },
         // };
-        static readonly Dictionary<PieceType, int> PieceTypes = new()
-        {
-            { PieceType.Pawn, PAWN },
-            { PieceType.Knight, KNIGHT },
-            { PieceType.Bishop, BISHOP },
-            { PieceType.Rook, ROOK },
-            { PieceType.Queen, QUEEN },
-            { PieceType.King, KING },
-        };
 
         virtual protected bool IsDummy => false;
 
