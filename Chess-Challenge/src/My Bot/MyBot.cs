@@ -1,7 +1,6 @@
 ﻿using ChessChallenge.API;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace ChessChallenge.Example
 {
@@ -291,7 +290,18 @@ namespace ChessChallenge.Example
             return bestIndex;
         }
 
-        public Move BestMove() => ChildMoves[Array.IndexOf(ChildVisits, ChildVisits.Max())];
+        public Move BestMove()
+        {
+            int maxIndex = 0;
+            for (int index = 1; index < ChildVisits.Length; index++)
+            {
+                if (ChildVisits[maxIndex] < ChildVisits[index])
+                {
+                    maxIndex = index;
+                }
+            }
+            return ChildMoves[maxIndex];
+        }
 
         public Node Select()
         {
