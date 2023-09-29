@@ -8,14 +8,15 @@ namespace ChessChallenge.Example
     class Node
     {
         Node Parent;
-        int N;
+        short N;
         bool IsExpanded = false;
         readonly bool IsDummy;
-        readonly float[] ChildValues;
-        readonly int[] ChildVisits;
-        readonly Move[] ChildMoves;
-        public static Board RootBoard;
+        float[] ChildValues = new float[218];
+        int[] ChildVisits = new int[218];
+        Move[] ChildMoves;
         Dictionary<Move, Node> Children = new();
+
+        public static Board RootBoard;
         public static bool IsWhiteToMove;
         static Random Random = new Random();
         static readonly Dictionary<PieceType, float> PieceValues = new()
@@ -59,21 +60,45 @@ namespace ChessChallenge.Example
             Parent.ReturnBoard();
         }
 
+        private static Queue<Node> _availableNodes = new Queue<Node>();
+
+        public static Node GetNode(Node parent, short n)
+        {
+            if (_availableNodes.Count > 0)
+            {
+                Node node = _availableNodes.Dequeue();
+                node.Parent = parent;
+                node.N = n;
+                node.init();
+                return node;
+            }
+
+            return new Node(parent, n);
+        }
+
+        public static void ReturnNode(Node node)
+        {
+            _availableNodes.Enqueue(node);
+        }
+
         public Node()
         {
             IsDummy = true;
-            ChildValues = new float[1];
-            ChildVisits = new int[1];
             ChildMoves = new Move[1];
         }
 
-        public Node(Node parent, int n)
+        public Node(Node parent, short n)
         {
             Parent = parent;
             N = n;
+            init();
+        }
+
+        private void init()
+        {
+            IsExpanded = false;
+            Children = new();
             ChildMoves = BorrowBoard().GetLegalMoves();
-            ChildValues = new float[ChildMoves.Length];
-            ChildVisits = new int[ChildMoves.Length];
             ReturnBoard();
         }
 
@@ -91,14 +116,14 @@ namespace ChessChallenge.Example
             set => Parent.ChildVisits[N] = value;
         }
 
-        int BestChild()
+        short BestChild()
         {
-            int bestIndex = -1;
+            short bestIndex = -1;
             float bestScore = float.MinValue;
-            for (var i = 0; i < ChildMoves.Length; ++i)
+            float precalcLog = MathF.Sqrt(MathF.Log(Visits));
+            for (short i = 0; i < ChildMoves.Length; ++i)
             {
-                float score = ChildValues[i] / (ChildVisits[i] + 1e-10f)
-                    + 1f * MathF.Sqrt(MathF.Log(Visits) / (ChildVisits[i] + 1e-10f));
+                float score = ChildValues[i] / (ChildVisits[i] + 1e-10f) + precalcLog / (ChildVisits[i] + 1e-10f);
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -119,7 +144,7 @@ namespace ChessChallenge.Example
                 var bestChildMove = current.ChildMoves[bestChildN];
                 if (!current.Children.ContainsKey(bestChildMove))
                 {
-                    current.Children[bestChildMove] = new Node(current, bestChildN);
+                    current.Children[bestChildMove] = Node.GetNode(current, bestChildN);
                 }
                 current = current.Children[bestChildMove];
             }
@@ -138,9 +163,9 @@ namespace ChessChallenge.Example
             }
             else
             {
-                var n = Node.Random.Next(ChildMoves.Length);
+                var n = (short)Node.Random.Next(ChildMoves.Length);
                 var childMove = ChildMoves[n];
-                var child = new Node(this, n);
+                var child = Node.GetNode(this, n);
                 Children[childMove] = child;
                 result = EvalBoard(child.BorrowBoard());
                 child.ReturnBoard();
@@ -156,6 +181,14 @@ namespace ChessChallenge.Example
             }
         }
 
+        private void ReturnNodeAndChildren(Node except)
+        {
+            foreach (var child in Children.Values)
+                if (child != except)
+                    child.ReturnNodeAndChildren(except);
+            Node.ReturnNode(this);
+        }
+
         static public Node GetNewRoot(Node? root, Board board)
         {
             Node.IsWhiteToMove = board.IsWhiteToMove;
@@ -164,7 +197,9 @@ namespace ChessChallenge.Example
             if (root != null)
                 try
                 {
-                    root = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory[^1]];
+                    var newRoot = root.Children[board.GameMoveHistory[^2]].Children[board.GameMoveHistory[^1]];
+                    root.ReturnNodeAndChildren(newRoot);
+                    root = newRoot;
                     var visits = root.Visits;
                     Console.WriteLine($"Reusing {root.Visits} visits");
                     root.Parent = new Node();
@@ -194,12 +229,40 @@ namespace ChessChallenge.Example
 
             root = Node.GetNewRoot(root, board);
 
-            float mu = 18.61447f;
-            var iter = 100_000f + 50_000f * MathF.Max(1.015729f * MathF.Exp(-(move - mu) * (move - mu) / (2 * MathF.Pow(7.229496f, 2))), 0.3f);
-            Console.WriteLine($"Iterations: {iter}, Move: {board.PlyCount / 2}");
+            // float mu = 18.61447f;
+            // var iter = 100_000f + 50_000f * MathF.Max(1.015729f * MathF.Exp(-(move - mu) * (move - mu) / (2 * MathF.Pow(7.229496f, 2))), 0.3f);
+            // Console.WriteLine($"Iterations: {iter}, Move: {board.PlyCount / 2}");
 
+            var iter = 100_000;
+
+            var stopwatch = new System.Diagnostics.Stopwatch();
+            stopwatch.Start();
+
+            Move? prevBest = null;
+            int prevVisits = 0;
             for (var i = 0; i < iter; ++i)
+            {
                 root.Select().ExpandAndPropagate();
+                if (i % 1000 == 0)
+                {
+                    if (prevBest == root.BestMove() && ++prevVisits > 20)
+                    {
+                        Console.WriteLine($"Stopped after {i} iterations");
+                        break;
+                    }
+                    if (prevBest != root.BestMove())
+                    {
+                        prevBest = root.BestMove();
+                        prevVisits = 0;
+                    }
+                }
+            }
+
+            stopwatch.Stop();
+            Console.WriteLine($"Avg. time: {stopwatch.ElapsedMilliseconds} ms");
+
+            long memoryBytes = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64;
+            Console.WriteLine($"Memory: {memoryBytes / 1024 / 1024} MB");
 
             return root.BestMove();
         }
